@@ -6,12 +6,12 @@ main(int argc, char *argv[])
 {
     int time;
     if (argc <= 1 || argc >= 3) {
-        fprintf(2, "sleep: require an argument");
+        fprintf(2, "sleep: require an argument\n");
         exit(1);
     }
     time = atoi(argv[1]); 
     if (time < 0) {
-        fprintf(2, "sleep: invalid argument");
+        fprintf(2, "sleep: invalid argument\n");
         exit(1);
     }
     sleep(time);

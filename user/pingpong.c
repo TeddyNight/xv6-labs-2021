@@ -9,8 +9,7 @@ main(int argc, char *argv[])
     int pid;
     pipe(p1);
     pipe(p2);
-    pid = fork();
-    if (pid == 0) {
+    if (fork() == 0) {
         pid = getpid();
         char c;
         read(p1[1], &c, 1);
@@ -19,7 +18,7 @@ main(int argc, char *argv[])
     } else {
         pid = getpid();
         write(p1[0], "\n", 1);
-        wait(&pid);
+        wait(0);
         pid = getpid();
         char c;
         read(p2[1], &c, 1);
