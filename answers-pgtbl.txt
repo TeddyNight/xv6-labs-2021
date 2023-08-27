@@ -1,0 +1,2 @@
+1. sysinfo: When processes being creating, kernel makes the struct sysinfo a new page in kernel, then mapping that page in user pagetable. And when sysinfo is called, the address of struct sysinfo will be the VA that maps to that page in kernel instead.
+2. Text & data section. Stack section. It could only read page1. Trapframe section.
