@@ -1,0 +1,6 @@
+1. Up to eight integer registers, a0-a7, and up to eight floating-point registers, fa0-fa7. a2
+2. Near 0x26, but the compiler inline the functions, the result has been computed in compilation.
+3. 0x616
+4. 0x38 
+5. he110 World, 0x726c6400, no
+6. undefined behavior
