@@ -360,10 +360,12 @@ int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
+  pte_t* pte;
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
-    pte_t* pte = walk(pagetable, va0, 0);
+    if (va0 >= MAXVA || (pte = walk(pagetable, va0, 0)) == 0)
+       return -1;
     if ((PTE_FLAGS(*pte) & PTE_COW) != 0) {
       char *mem;
       uint flags = (PTE_FLAGS(*pte) & ~PTE_COW) | PTE_W;
