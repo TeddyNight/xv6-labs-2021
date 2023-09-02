@@ -67,7 +67,7 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else if (r_scause() == 15) {
+  } else if (r_scause() == 15 && r_stval() < TRAPFRAME) {
     // store page fault
     uint64 va = PGROUNDDOWN(r_stval());
     pte_t *pte;
