@@ -67,6 +67,37 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if (r_scause() == 15) {
+    // store page fault
+    uint64 va = PGROUNDDOWN(r_stval());
+    pte_t *pte;
+    uint64 pa;
+    uint flags;
+    char *mem;
+
+    if((pte = walk(p->pagetable, va, 0)) == 0)
+      panic("cow: pte should exists");
+    if((*pte & PTE_V) == 0)
+      panic("cow: page not present");
+    if ((PTE_FLAGS(*pte) & PTE_COW) == 0) {
+       printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
+       printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+       p->killed = 1;
+    } else {
+       pa = PTE2PA(*pte);
+       flags = (PTE_FLAGS(*pte) | PTE_W) & ~PTE_COW;
+       if((mem = kalloc()) == 0) {
+          printf("cow: run out of memory\n");
+          p->killed = 1;
+       } else {
+          memmove(mem, (char*)pa, PGSIZE);
+          uvmunmap(p->pagetable, va, 1, 1);
+          if(mappages(p->pagetable, va, PGSIZE, (uint64)mem, flags) != 0){
+             kfree(mem);
+             panic("cow: map page failed");
+          }
+       }
+    }
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());

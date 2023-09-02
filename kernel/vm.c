@@ -15,6 +15,8 @@ extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
 
+extern int ref[];
+
 // Make a direct-map page table for the kernel.
 pagetable_t
 kvmmake(void)
@@ -148,8 +150,10 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   for(;;){
     if((pte = walk(pagetable, a, 1)) == 0)
       return -1;
+    /*
     if(*pte & PTE_V)
       panic("mappages: remap");
+    */
     *pte = PA2PTE(pa) | perm | PTE_V;
     if(a == last)
       break;
@@ -178,8 +182,8 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       panic("uvmunmap: not mapped");
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
+    uint64 pa = PTE2PA(*pte);
     if(do_free){
-      uint64 pa = PTE2PA(*pte);
       kfree((void*)pa);
     }
     *pte = 0;
@@ -303,7 +307,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
+  //char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
@@ -311,7 +315,15 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
-    flags = PTE_FLAGS(*pte);
+    flags = (PTE_FLAGS(*pte) & ~PTE_W) | PTE_COW;
+    *pte = (*pte & ~PTE_W) | PTE_COW;
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){
+      goto err;
+    }
+    ref[(pa - KERNBASE) >> 12]++;
+    /*
+    pa = PTE2PA(*pte);
+    flags = (PTE_FLAGS(*pte) & ~PTE_W) | PTE_COW;
     if((mem = kalloc()) == 0)
       goto err;
     memmove(mem, (char*)pa, PGSIZE);
@@ -319,6 +331,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       kfree(mem);
       goto err;
     }
+    */
   }
   return 0;
 
@@ -350,7 +363,24 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
-    pa0 = walkaddr(pagetable, va0);
+    pte_t* pte = walk(pagetable, va0, 0);
+    if ((PTE_FLAGS(*pte) & PTE_COW) != 0) {
+      char *mem;
+      uint flags = (PTE_FLAGS(*pte) & ~PTE_COW) | PTE_W;
+
+      if ((mem = kalloc()) == 0) {
+        printf("copyout(): not enough memory\n");
+        return -1;
+      }
+      memmove(mem, (char *)PTE2PA(*pte), PGSIZE);
+      uvmunmap(pagetable, va0, 1, 1);
+      if (mappages(pagetable, va0, PGSIZE, (uint64)mem, flags) != 0) {
+        return -1;
+      } 
+      pa0 = (uint64)mem;
+    } else {
+      pa0 = walkaddr(pagetable, va0);
+    }
     if(pa0 == 0)
       return -1;
     n = PGSIZE - (dstva - va0);
