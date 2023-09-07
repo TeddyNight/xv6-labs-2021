@@ -1,0 +1,1 @@
+1. When both 2 threads called put(), both of them reached the line that called insert(), however only one of them got excuted, and the one running later will overwrite the table[i] modified by the former one, which caused key missing.
