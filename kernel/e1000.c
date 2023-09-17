@@ -102,7 +102,26 @@ e1000_transmit(struct mbuf *m)
   // the TX descriptor ring so that the e1000 sends it. Stash
   // a pointer so that it can be freed after sending.
   //
-  
+  acquire(&e1000_lock);
+  uint64 i = regs[E1000_TDT] % TX_RING_SIZE;
+  printf("e1000: sending pkt %d\n", i);
+  struct tx_desc* desc = &tx_ring[i];
+  if (desc->status & E1000_TXD_STAT_DD) {
+     if (desc->addr) {
+        mbuffree(tx_mbufs[i]);
+     }
+     memset(desc, 0, sizeof(struct tx_desc));
+     tx_mbufs[i] = m;
+     desc->cmd = 1;
+     desc->length = m->len;
+     desc->addr = (uint64)m->head;
+     regs[E1000_TDT] = (uint64)(i + 1) % TX_RING_SIZE;
+     release(&e1000_lock);
+  } else {
+     printf("e1000: working on previous request");
+     release(&e1000_lock);
+     return -1;
+  }
   return 0;
 }
 
@@ -115,6 +134,45 @@ e1000_recv(void)
   // Check for packets that have arrived from the e1000
   // Create and deliver an mbuf for each packet (using net_rx()).
   //
+  // total num of pkts exceed the ring size?
+  acquire(&e1000_lock);
+  struct mbuf* bufs[RX_RING_SIZE];
+  uint64 head = regs[E1000_RDH];
+  uint64 start = (regs[E1000_RDT] + 1) % RX_RING_SIZE;
+  memset(bufs, 0, sizeof(bufs));
+  for (uint64 i = start; i <= head; i = (i + 1) % RX_RING_SIZE) {
+     if (i == head) {
+        release(&e1000_lock);
+        return;
+     }
+     struct rx_desc desc = rx_ring[i];
+     bufs[i] = rx_mbufs[i];
+     if (desc.status & E1000_RXD_STAT_EOP) {
+        if (desc.status & E1000_RXD_STAT_DD) {
+           regs[E1000_RDT] = i;
+           break;
+        } else {
+           release(&e1000_lock);
+           return;
+        }
+     }
+  }
+
+  for (uint64 i = start; bufs[i]; i = (i + 1) % RX_RING_SIZE) {
+     struct rx_desc* desc = &rx_ring[i];
+     printf("e1000: received pkt %d available\n", i);
+     bufs[i]->len = desc->length;
+     rx_mbufs[i] = mbufalloc(0);
+     if (!rx_mbufs[i])
+        panic("e1000");
+     memset(desc, 0, sizeof(struct rx_desc));
+     desc->addr = (uint64)rx_mbufs[i]->head;
+  }
+  release(&e1000_lock);
+
+  for (uint64 i = start; bufs[i]; i = (i + 1) % RX_RING_SIZE) {
+     net_rx(bufs[i]);
+  }
 }
 
 void
