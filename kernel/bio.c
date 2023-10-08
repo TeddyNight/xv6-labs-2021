@@ -120,6 +120,14 @@ bget(uint dev, uint blockno)
     */
   }
   if(b && b->refcnt == 0) {
+     if (b->blockno != 0) {
+        if (b->blockno % NBUFBUCKET != blockno % NBUFBUCKET) 
+           acquire(&bcache.locks[b->blockno % NBUFBUCKET]);
+        b->next->prev = b->prev;
+        b->prev->next = b->next;
+        if (b->blockno % NBUFBUCKET != blockno % NBUFBUCKET) 
+           release(&bcache.locks[b->blockno % NBUFBUCKET]);
+     }
      b->dev = dev;
      b->blockno = blockno;
      b->valid = 0;
@@ -128,7 +136,6 @@ bget(uint dev, uint blockno)
      b->prev = bucket;
      bucket->next->prev = b;
      bucket->next = b;
-     //release(&bcache.lock);
      release(&bcache.lock);
      release(&bcache.locks[blockno % NBUFBUCKET]);
      acquiresleep(&b->lock);
@@ -165,7 +172,7 @@ bwrite(struct buf *b)
 void
 brelse(struct buf *b)
 {
-  uint bid = b->blockno % NBUFBUCKET;
+  //uint bid = b->blockno % NBUFBUCKET;
   //struct buf* bucket = &bcache.bucket[b->blockno % NBUFBUCKET];  
 
   if(!holdingsleep(&b->lock))
@@ -173,20 +180,12 @@ brelse(struct buf *b)
 
   releasesleep(&b->lock);
 
-  acquire(&bcache.locks[bid]);
-  //acquire(&bcache.lock);
+  //acquire(&bcache.locks[bid]);
   b->refcnt--;
+  b->timestamp = ticks;
+  /*
   if (b->refcnt == 0) {
     // no one is waiting for it.
-    /*
-    b->next->prev = b->prev;
-    b->prev->next = b->next;
-    b->next = bcache.head.next;
-    b->prev = &bcache.head;
-    bcache.head.next->prev = b;
-    bcache.head.next = b;
-    */
-    b->timestamp = ticks;
     //acquiresleep(&bucket->lock);
     b->next->prev = b->prev;
     b->prev->next = b->next;
@@ -195,6 +194,7 @@ brelse(struct buf *b)
   
   //release(&bcache.lock);
   release(&bcache.locks[bid]);
+  */
 }
 
 void
