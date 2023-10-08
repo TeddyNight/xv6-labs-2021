@@ -120,23 +120,24 @@ bget(uint dev, uint blockno)
     */
   }
   if(b && b->refcnt == 0) {
-     if (b->blockno != 0) {
-        if (b->blockno % NBUFBUCKET != blockno % NBUFBUCKET) 
-           acquire(&bcache.locks[b->blockno % NBUFBUCKET]);
-        b->next->prev = b->prev;
-        b->prev->next = b->next;
-        if (b->blockno % NBUFBUCKET != blockno % NBUFBUCKET) 
-           release(&bcache.locks[b->blockno % NBUFBUCKET]);
-     }
+     uint oldblockno = b->blockno;
      b->dev = dev;
-     b->blockno = blockno;
      b->valid = 0;
      b->refcnt = 1;
+     b->blockno = blockno;
+     release(&bcache.lock);
+     if (oldblockno != 0) {
+        if (oldblockno % NBUFBUCKET != blockno % NBUFBUCKET) 
+           acquire(&bcache.locks[oldblockno % NBUFBUCKET]);
+        b->next->prev = b->prev;
+        b->prev->next = b->next;
+        if (oldblockno % NBUFBUCKET != blockno % NBUFBUCKET) 
+           release(&bcache.locks[oldblockno % NBUFBUCKET]);
+     }
      b->next = bucket->next;
      b->prev = bucket;
      bucket->next->prev = b;
      bucket->next = b;
-     release(&bcache.lock);
      release(&bcache.locks[blockno % NBUFBUCKET]);
      acquiresleep(&b->lock);
      return b;
