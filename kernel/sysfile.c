@@ -485,10 +485,87 @@ sys_pipe(void)
   return 0;
 }
 
+// simply walk around to find available va in vm
+uint64
+availaddr(pagetable_t pagetable, int size)
+{
+   uint64 addr = ~0;
+   int n = size / PGSIZE + (size % PGSIZE == 0? 0: 1);
+   pte_t *pte;
+   for (int i = 0; i < 512; i++) {
+      pagetable_t pgtb1;
+      pte = &pagetable[i];
+      if (*pte & PTE_V) {
+         pagetable = (pagetable_t)PTE2PA(*pte);
+      } else {
+         if ((pagetable = (pde_t*)kalloc()) == 0)
+            return addr;
+         memset(pagetable, 0, PGSIZE);
+         *pte = PA2PTE(pagetable) | PTE_V;
+      }
+      pgtb1 = pagetable;
+      for (int j = 0; j < 512; j++) {
+         pte = &pgtb1[j];
+         if (*pte & PTE_V) {
+            pagetable = (pagetable_t)PTE2PA(*pte);
+         } else {
+            if ((pagetable = (pde_t*)kalloc()) == 0)
+               return addr;
+            memset(pagetable, 0, PGSIZE);
+            *pte = PA2PTE(pagetable) | PTE_V;
+         }
+         for (int k = 0; k + n - 1 < 512; k++) {
+            int avail = 1;
+            for (int p = k; p < k + n; p++) {
+               pte = &pagetable[p];
+               if (*pte & PTE_V) {
+                  avail = 0;
+                  break;
+               }
+            }
+            if (avail) {
+               for (int p = k; p < k + n; p++) {
+                  pte = &pagetable[p];
+                  *pte = 0 | PTE_V;
+               }
+               addr = (i << PXSHIFT(0)) | (j << PXSHIFT(1)) | (k << PXSHIFT(2));
+               return addr;
+            }
+         }
+      }
+   }
+   return addr;
+}
+
 uint64
 sys_mmap(void)
 {
-   return ~0;
+   struct proc *p;
+   struct vma *v;
+   int length, prot, flags, fd;
+   if (argint(1, &length) == -1 || argint(2, &prot) == -1 || argint(3, &flags) == -1 || argint(4, &fd) == -1)
+      return ~0;
+   p = myproc();
+   v = &p->vma[p->nvma];
+
+   v->f = p->ofile[fd];
+   if (v->f->ref < 1) {
+      return ~0;
+   }
+   v->f->ref++;
+
+   v->addr = (void *)availaddr(p->pagetable, length);
+   if (v->addr == (void *)~0) {
+      v->f->ref--;
+      return ~0;
+   }
+
+   v->length = length;
+   v->prot = prot;
+   v->flags = flags;
+   p->nvma++;
+
+   return (uint64)v->addr;
 }
 
 uint64
