@@ -502,12 +502,13 @@ sys_mmap(void)
    }
    v->f->ref++;
 
-   v->addr = (void *)p->sz;
-   p->sz += length / PGSIZE + (length % PGSIZE == 0? 0: 1);
+   v->addr = (void *)PGROUNDUP(p->sz);
+   p->sz = PGROUNDUP(p->sz) + length;
    
    v->length = length;
    v->prot = prot;
    v->flags = flags;
+   v->offset = 0;
    p->nvma++;
 
    return (uint64)v->addr;
