@@ -485,58 +485,6 @@ sys_pipe(void)
   return 0;
 }
 
-// simply walk around to find available va in vm
-uint64
-availaddr(pagetable_t pagetable, int size, uint64 perm)
-{
-   uint64 addr = ~0;
-   uint64 n = size / PGSIZE + (size % PGSIZE == 0? 0: 1);
-   pte_t *pte;
-   for (uint64 i = 0; i < 512; i++) {
-      pagetable_t pgtb1;
-      pte = &pagetable[i];
-      if (*pte & PTE_V) {
-         pagetable = (pagetable_t)PTE2PA(*pte);
-      } else {
-         if ((pagetable = (pde_t*)kalloc()) == 0)
-            return addr;
-         memset(pagetable, 0, PGSIZE);
-         *pte = PA2PTE(pagetable) | PTE_V;
-      }
-      pgtb1 = pagetable;
-      for (uint64 j = 0; j < 512; j++) {
-         pte = &pgtb1[j];
-         if (*pte & PTE_V) {
-            pagetable = (pagetable_t)PTE2PA(*pte);
-         } else {
-            if ((pagetable = (pde_t*)kalloc()) == 0)
-               return addr;
-            memset(pagetable, 0, PGSIZE);
-            *pte = PA2PTE(pagetable) | PTE_V;
-         }
-         for (uint64 k = 0; k + n - 1 < 512; k++) {
-            int avail = 1;
-            for (int p = k; p < k + n; p++) {
-               pte = &pagetable[p];
-               if (*pte & PTE_V) {
-                  avail = 0;
-                  break;
-               }
-            }
-            if (avail) {
-               for (uint64 p = k; p < k + n; p++) {
-                  pte = &pagetable[p];
-                  *pte = perm;
-               }
-               addr = (i << PXSHIFT(0)) | (j << PXSHIFT(1)) | (k << PXSHIFT(2));
-               return addr;
-            }
-         }
-      }
-   }
-   return addr;
-}
-
 uint64
 sys_mmap(void)
 {
@@ -554,18 +502,9 @@ sys_mmap(void)
    }
    v->f->ref++;
 
-   if (prot & PROT_READ && prot & PROT_WRITE)
-      v->addr = (void *)availaddr(p->pagetable, length, PTE_R | PTE_W);
-   else if (prot & PROT_READ)
-      v->addr = (void *)availaddr(p->pagetable, length, PTE_R);
-   else if (prot & PROT_WRITE)
-      v->addr = (void *)availaddr(p->pagetable, length, PTE_W);
-   if (v->addr == (void *)~0) {
-      v->addr = (void *)availaddr(p->pagetable, length, PTE_W);
-      v->f->ref--;
-      return ~0;
-   }
-
+   v->addr = (void *)p->sz;
+   p->sz += length / PGSIZE + (length % PGSIZE == 0? 0: 1);
+   
    v->length = length;
    v->prot = prot;
    v->flags = flags;
