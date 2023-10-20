@@ -497,6 +497,8 @@ sys_mmap(void)
    v = &p->vma[p->nvma];
 
    v->f = p->ofile[fd];
+   if (v->f->writable == 0 && prot & PROT_WRITE && flags & MAP_SHARED)
+      return ~0;
    if (v->f->ref < 1) {
       return ~0;
    }
