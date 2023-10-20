@@ -516,15 +516,11 @@ sys_mmap(void)
    return (uint64)v->addr;
 }
 
-uint64
-sys_munmap(void)
+int
+munmap(uint64 addr, int length)
 {
-   uint64 addr;
-   int length;
    struct vma* vma;
    struct proc* p;
-   if (argaddr(0, &addr) == -1 || argint(1, &length) == -1)
-      return -1;
    vma = 0;
    p = myproc();
    if (addr >= p->sz)
@@ -557,6 +553,17 @@ sys_munmap(void)
       if (addr == (uint64)vma->addr && length == vma->length)
          vma->f->ref--;
       memset(vma, 0, sizeof(struct vma));
+      p->nvma--;
    }
    return 0;
+}
+
+uint64
+sys_munmap(void)
+{
+   uint64 addr;
+   int length;
+   if (argaddr(0, &addr) == -1 || argint(1, &length) == -1)
+      return -1;
+   return munmap(addr, length);
 }

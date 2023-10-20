@@ -344,6 +344,10 @@ exit(int status)
   if(p == initproc)
     panic("init exiting");
 
+  // unmap mapped regions
+  for (int i = p->nvma - 1; i >= 0; i--) {
+     munmap((uint64)p->vma[i].addr, p->vma[i].length);
+  }
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){
     if(p->ofile[fd]){
