@@ -74,7 +74,7 @@ usertrap(void)
   } else if (r_scause() == 13) {
      int ismmap = 0;
      uint64 va = r_stval();
-     if (va >= MAXVA || PTE_FLAGS(*walk(p->pagetable, va, 0)) & PTE_V)
+     if (va >= KERNBASE || PTE_FLAGS(*walk(p->pagetable, va, 0)) & PTE_V)
         goto error;
      for (int i = 0; i < p->nvma; i++) {
         struct vma* vma = &p->vma[i];
