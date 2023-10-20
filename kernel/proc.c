@@ -5,6 +5,9 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h"
 
 struct cpu cpus[NCPU];
 
@@ -300,6 +303,21 @@ fork(void)
     if(p->ofile[i])
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
+
+  // copy VMAs
+  np->nvma = p->nvma;
+  for(i = 0; i < p->nvma; i++) {
+     struct vma* nv = &np->vma[i];
+     struct vma* v = &p->vma[i];
+     nv->addr = v->addr;
+     nv->fd = v->fd;
+     nv->f = np->ofile[nv->fd];
+     nv->f->ref++;
+     nv->length = v->length;
+     nv->prot = v->prot;
+     nv->flags = v->flags;
+     nv->offset = v->offset;
+  }
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 

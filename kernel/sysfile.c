@@ -507,6 +507,7 @@ sys_mmap(void)
    v->addr = (void *)PGROUNDUP(p->sz);
    p->sz = PGROUNDUP(p->sz) + length;
    
+   v->fd = fd;
    v->length = length;
    v->prot = prot;
    v->flags = flags;
@@ -533,7 +534,7 @@ munmap(uint64 addr, int length)
    }
    for (uint64 i = PGROUNDDOWN(addr); i < PGROUNDUP(addr + length); i += PGSIZE) {
       pte_t *pte = walk(p->pagetable, i, 0);
-      if (PTE_FLAGS(*pte) & PTE_V) {
+      if (pte && PTE_FLAGS(*pte) & PTE_V) {
          if (vma && i < PGROUNDUP((uint64)vma->addr + vma->length) && PTE_FLAGS(*pte) & PTE_D && vma->prot & PROT_WRITE && vma->flags & MAP_SHARED) {
             int r = 0;
             begin_op();
