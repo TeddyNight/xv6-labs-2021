@@ -536,8 +536,9 @@ sys_munmap(void)
       vma = 0;
    }
    for (uint64 i = PGROUNDDOWN(addr); i < PGROUNDUP(addr + length); i += PGSIZE) {
-      if (walkaddr(p->pagetable, i) != 0) {
-         if (vma && i < PGROUNDUP((uint64)vma->addr + vma->length) && vma->prot & PROT_WRITE && vma->flags & MAP_SHARED) {
+      pte_t *pte = walk(p->pagetable, i, 0);
+      if (PTE_FLAGS(*pte) & PTE_V) {
+         if (vma && i < PGROUNDUP((uint64)vma->addr + vma->length) && PTE_FLAGS(*pte) & PTE_D && vma->prot & PROT_WRITE && vma->flags & MAP_SHARED) {
             int r = 0;
             begin_op();
             ilock(vma->f->ip);
