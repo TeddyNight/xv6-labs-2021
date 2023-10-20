@@ -517,5 +517,45 @@ sys_mmap(void)
 uint64
 sys_munmap(void)
 {
-   return -1;
+   uint64 addr;
+   int length;
+   struct vma* vma;
+   struct proc* p;
+   pte_t *pte;
+   if (argaddr(0, &addr) == -1 || argint(1, &length) == -1)
+      return -1;
+   vma = 0;
+   p = myproc();
+   if (addr >= p->sz)
+      return -1;
+   for (int i = 0; i < p->nvma; i++) {
+      vma = &p->vma[i];
+      if (addr >= (uint64)vma->addr && addr + length <= (uint64)vma->addr + vma->length)
+         break;
+      vma = 0;
+   }
+   if (!vma)
+      return -1;
+   for (uint64 i = PGROUNDDOWN(addr); i < PGROUNDUP(addr + length); i += PGSIZE) {
+      pte = walk(p->pagetable, i, 0);
+      if (PTE_FLAGS(*pte)) {
+         if (vma->prot & PROT_WRITE && vma->flags & MAP_SHARED) {
+            int r = 0;
+            begin_op();
+            ilock(vma->f->ip);
+            if ((r = writei(vma->f->ip, 1, i, vma->offset + i - (uint64)vma->addr, PGSIZE)) <= 0) {
+               iunlock(vma->f->ip);
+               end_op();
+               return -1;
+            }
+            iunlock(vma->f->ip);
+            end_op();
+         }
+         uvmunmap(p->pagetable, i, 1, 1);
+      }
+   }
+   if (addr == (uint64)vma->addr && length == vma->length)
+      vma->f->ref--;
+   memset(vma, 0, sizeof(struct vma));
+   return 0;
 }
